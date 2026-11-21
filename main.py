@@ -136,7 +136,25 @@ class FallTemplateBot2026(ForecastBot):
             prompt = self._get_research_prompt(question, researcher)
 
             if isinstance(researcher, GeneralLlm):
-                research = await researcher.invoke(prompt)
+                # Sol lab: two independent web-search researchers (winners averaged ~1.7 sources)
+                second = GeneralLlm(
+                    model="openrouter/openai/gpt-5.4-nano:online",
+                    temperature=0,
+                    timeout=120,
+                    allowed_tries=2,
+                )
+                results = await asyncio.gather(
+                    researcher.invoke(prompt), second.invoke(prompt),
+                    return_exceptions=True,
+                )
+                parts = [
+                    f"=== Research source {i + 1} ===\n{r}"
+                    for i, r in enumerate(results)
+                    if not isinstance(r, Exception)
+                ]
+                if not parts:
+                    raise results[0]
+                research = "\n\n".join(parts)
             elif (
                 researcher == "asknews/news-summaries"
                 or researcher == "asknews/deep-research/low-depth"
@@ -259,7 +277,7 @@ class FallTemplateBot2026(ForecastBot):
             num_validation_samples=self._structure_output_validation_samples,
             additional_instructions=parsing_instructions,
         )
-        decimal_pred = max(0.01, min(0.99, binary_prediction.prediction_in_decimal))
+        decimal_pred = max(0.03, min(0.97, binary_prediction.prediction_in_decimal))  # Sol lab: capping was the top differentiator among winners (Fall 2025 survey)
 
         logger.info(
             f"Forecasted URL {question.page_url} with prediction: {decimal_pred}."
