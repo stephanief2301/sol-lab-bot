@@ -126,6 +126,27 @@ class FallTemplateBot2026(ForecastBot):
     _concurrency_limiter = asyncio.Semaphore(_max_concurrent_questions)
     _structure_output_validation_samples = 2
 
+    # Sol lab: mix models. Every 3rd forecast uses GPT instead of Claude
+    # (spring 2026: the top-10 bots mixed GPT-5.x into their ensembles).
+    # If GPT fails, that forecast falls back to the default Claude model.
+    _second_forecaster_model = "openrouter/openai/gpt-5.6-terra"
+    _forecast_counter = 0
+
+    async def _forecast_reasoning(self, prompt: str) -> str:
+        FallTemplateBot2026._forecast_counter += 1
+        if FallTemplateBot2026._forecast_counter % 3 == 0:
+            try:
+                second = GeneralLlm(
+                    model=self._second_forecaster_model,
+                    temperature=0.3,
+                    timeout=120,
+                    allowed_tries=2,
+                )
+                return await second.invoke(prompt)
+            except Exception as e:
+                logger.warning(f"Second forecaster failed, using default: {e}")
+        return await self.get_llm("default", "llm").invoke(prompt)
+
     ##################################### RESEARCH #####################################
 
     async def run_research(self, question: MetaculusQuestion) -> str:
@@ -262,7 +283,7 @@ class FallTemplateBot2026(ForecastBot):
         question: BinaryQuestion,
         prompt: str,
     ) -> ReasonedPrediction[float]:
-        reasoning = await self.get_llm("default", "llm").invoke(prompt)
+        reasoning = await self._forecast_reasoning(prompt)
         logger.info(f"Reasoning for URL {question.page_url}: {reasoning}")
         parsing_instructions = clean_indents(
             f"""
@@ -344,7 +365,7 @@ class FallTemplateBot2026(ForecastBot):
             {self._create_resolved_question_parsing_message()}
             """
         )
-        reasoning = await self.get_llm("default", "llm").invoke(prompt)
+        reasoning = await self._forecast_reasoning(prompt)
         logger.info(f"Reasoning for URL {question.page_url}: {reasoning}")
         predicted_option_list: PredictedOptionList = await structure_output(
             text_to_structure=reasoning,
@@ -427,7 +448,7 @@ class FallTemplateBot2026(ForecastBot):
         question: NumericQuestion,
         prompt: str,
     ) -> ReasonedPrediction[NumericDistribution]:
-        reasoning = await self.get_llm("default", "llm").invoke(prompt)
+        reasoning = await self._forecast_reasoning(prompt)
         logger.info(f"Reasoning for URL {question.page_url}: {reasoning}")
         parsing_instructions = clean_indents(
             f"""
@@ -523,7 +544,7 @@ class FallTemplateBot2026(ForecastBot):
         question: DateQuestion,
         prompt: str,
     ) -> ReasonedPrediction[NumericDistribution]:
-        reasoning = await self.get_llm("default", "llm").invoke(prompt)
+        reasoning = await self._forecast_reasoning(prompt)
         logger.info(f"Reasoning for URL {question.page_url}: {reasoning}")
         parsing_instructions = clean_indents(
             f"""
