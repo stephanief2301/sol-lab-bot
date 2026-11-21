@@ -2,8 +2,9 @@ name: Forecast on Metaculus Cup
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0 */2 * *" # runs at midnight every 2 days
+  # Sol lab: schedule off (no prizes for bots in the Cup; saves budget). Run manually if needed.
+  # schedule:
+  #   - cron: "0 0 */2 * *"
 
 # Add concurrency group to prevent parallel runs
 concurrency:

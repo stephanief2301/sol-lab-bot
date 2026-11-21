@@ -174,7 +174,13 @@ class FallTemplateBot2026(ForecastBot):
             f"""
             You are an assistant to a superforecaster.
             The superforecaster will give you a question they intend to forecast on.
-            To be a great assistant, you generate a concise but detailed rundown of the most relevant news, including if the question would resolve Yes or No based on current information.
+            Search the web and produce a concise but detailed rundown with these sections:
+            1. RESOLUTION: exactly what must happen, by what date, per which source. Note edge cases (ties, delays, cancellations).
+            2. BASE RATE: the most relevant reference class and how often this kind of event has happened historically, with numbers if available.
+            3. CURRENT STATUS: the latest dated facts and official data (cite source names and dates). Say if the question would resolve Yes or No based on current information.
+            4. EVIDENCE FOR / EVIDENCE AGAINST: the strongest points on each side. Actively look for information that contradicts the obvious answer.
+            5. SCHEDULED EVENTS: known upcoming dates (releases, votes, meetings, deadlines) before resolution.
+            Separate confirmed facts from rumors. Never invent numbers; say "unknown" if you cannot verify something.
             You do not produce forecasts yourself.
 
             Question:
@@ -218,10 +224,13 @@ class FallTemplateBot2026(ForecastBot):
             Before answering you write:
             (a) The time left until the outcome to the question is known.
             (b) The status quo outcome if nothing changed.
-            (c) A brief description of a scenario that results in a No outcome.
-            (d) A brief description of a scenario that results in a Yes outcome.
+            (c) The base rate (outside view): the reference class and how often such events happen, as a starting probability.
+            (d) A brief description of a scenario that results in a No outcome.
+            (e) A brief description of a scenario that results in a Yes outcome.
+            (f) Devil's advocate: the strongest argument against your leaning, and how much it should move you.
+            (g) How you adjust from the base rate given the specific current evidence.
 
-            You write your rationale remembering that good forecasters put extra weight on the status quo outcome since the world changes slowly most of the time.
+            You write your rationale remembering that good forecasters put extra weight on the status quo outcome since the world changes slowly most of the time, start from base rates, and are well calibrated: avoid probabilities below 3% or above 97% unless the outcome is essentially already determined.
             {self._get_conditional_disclaimer_if_necessary(question)}
 
             The last thing you write is your final answer as: "Probability: ZZ%", 0-100
@@ -709,23 +718,31 @@ if __name__ == "__main__":
     # uncomment and edit to pin specific models.
     template_bot = FallTemplateBot2026(
         research_reports_per_question=1,
-        predictions_per_research_report=5,
+        predictions_per_research_report=3,  # Sol lab: 3 to stay within the $20/month budget
         use_research_summary_to_forecast=False,
         publish_reports_to_metaculus=publish_to_metaculus,
         folder_to_save_reports_to=None,
         skip_previously_forecasted_questions=True,
         extra_metadata_in_explanation=True,
-        # llms={
-        #     "default": GeneralLlm(
-        #         model="openrouter/openai/gpt-4o",
-        #         temperature=0.3,
-        #         timeout=40,
-        #         allowed_tries=2,
-        #     ),
-        #     "summarizer": "openai/gpt-4o-mini",
-        #     "researcher": "asknews/news-summaries",
-        #     "parser": "openai/gpt-4o-mini",
-        # },
+        # Sol lab models (prices checked on OpenRouter 20 Nov 2026, per 1M tokens):
+        # Sonnet 5.5 = $2 in / $10 out; Haiku 5.5 = $0.10 in / $0.50 out.
+        # ":online" adds OpenRouter web search to the researcher.
+        llms={
+            "default": GeneralLlm(
+                model="openrouter/anthropic/claude-sonnet-5.5",
+                temperature=0.3,
+                timeout=120,
+                allowed_tries=2,
+            ),
+            "summarizer": "openrouter/anthropic/claude-haiku-5.5",
+            "researcher": GeneralLlm(
+                model="openrouter/anthropic/claude-haiku-5.5:online",
+                temperature=0,
+                timeout=120,
+                allowed_tries=2,
+            ),
+            "parser": "openrouter/anthropic/claude-haiku-5.5",
+        },
     )
 
     # Per-mode tournament URL shown in the summary banner footer. These
